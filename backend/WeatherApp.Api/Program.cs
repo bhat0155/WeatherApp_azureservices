@@ -1,0 +1,64 @@
+using Microsoft.EntityFrameworkCore;
+using WeatherApp.Api.Configuration;
+using WeatherApp.Api.Data;
+using WeatherApp.Api.Middleware;
+using WeatherApp.Api.Repositories;
+using WeatherApp.Api.Services;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Configuration
+builder.Services.Configure<OpenWeatherMapOptions>(
+    builder.Configuration.GetSection(OpenWeatherMapOptions.SectionName));
+
+// Database
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// HTTP client for OpenWeatherMap
+builder.Services.AddHttpClient<IWeatherService, WeatherService>();
+
+// Repositories & Services
+builder.Services.AddScoped<IWeatherRepository, WeatherRepository>();
+
+// CORS — allow React dev server and any Azure-hosted frontend
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        var allowedOrigins = builder.Configuration
+            .GetSection("AllowedOrigins")
+            .Get<string[]>() ?? ["http://localhost:5173", "http://localhost:3000"];
+
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+// Auto-migrate in Development
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+}
+
+app.UseMiddleware<GlobalExceptionMiddleware>();
+app.UseCors("AllowFrontend");
+app.UseAuthorization();
+app.MapControllers();
+
+app.Run();
+
+// Make Program accessible for integration tests
+public partial class Program { }

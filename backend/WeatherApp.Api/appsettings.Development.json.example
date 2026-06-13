@@ -1,0 +1,19 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Debug",
+      "Microsoft.AspNetCore": "Information"
+    }
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=localhost,1433;Database=WeatherAppDb;User Id=sa;Password=WeatherApp@123;TrustServerCertificate=True;"
+  },
+  "OpenWeatherMap": {
+    "ApiKey": "YOUR_OPENWEATHERMAP_API_KEY_HERE",
+    "BaseUrl": "https://api.openweathermap.org/data/2.5"
+  },
+  "AllowedOrigins": [
+    "http://localhost:5173",
+    "http://localhost:3000"
+  ]
+}

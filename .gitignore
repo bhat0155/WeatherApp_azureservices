@@ -1,0 +1,33 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/
+*.log
+
+# Secrets — never commit these
+appsettings.Development.json
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+dist/
+build/
+.cache/
+
+# Test results
+TestResults/
+coverage/
+*.trx
+
+# EF migrations temp
+*.mdf
+*.ldf
+
+# OS
+.DS_Store
+Thumbs.db

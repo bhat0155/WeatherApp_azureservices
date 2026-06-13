@@ -2,9 +2,10 @@
 
 A two-tier weather application built to showcase Azure DevOps CI/CD pipelines.
 
-- **Backend**: ASP.NET Core 8 Web API with Entity Framework Core + SQL Server
+- **Backend**: ASP.NET Core 9 Web API + Entity Framework Core + SQL Server
 - **Frontend**: React 18 + Vite
 - **External data**: OpenWeatherMap API (free tier)
+- **Tests**: 20 backend (xUnit) + 27 frontend (Vitest)
 
 ---
 
@@ -13,14 +14,14 @@ A two-tier weather application built to showcase Azure DevOps CI/CD pipelines.
 ```
 ┌─────────────────┐       HTTP        ┌──────────────────────┐
 │  React (Vite)   │ ────────────────► │  ASP.NET Core API    │
-│  :5173          │                   │  :5000               │
+│  :5173          │                   │  :5050               │
 └─────────────────┘                   │  ┌────────────────┐  │
                                       │  │  EF Core ORM   │  │
                     HTTPS             │  └────────┬───────┘  │
                 ┌────────────────────►│           │          │
                 │  OpenWeatherMap API │  ┌────────▼───────┐  │
                 └────────────────────┘  │  SQL Server    │  │
-                                        │  (LocalDB/     │  │
+                                        │  (Docker local/│  │
                                         │   Azure SQL)   │  │
                                         └────────────────┘  │
                                       └──────────────────────┘
@@ -32,10 +33,12 @@ A two-tier weather application built to showcase Azure DevOps CI/CD pipelines.
 
 | Tool | Version |
 |------|---------|
-| .NET SDK | 9.0+ (targets net9.0) |
+| .NET SDK | 9.0+ |
 | Node.js | 20+ |
-| SQL Server LocalDB | Included with Visual Studio or standalone |
+| Docker Desktop | Latest (for SQL Server) |
 | OpenWeatherMap API key | Free at openweathermap.org |
+
+> **macOS note:** LocalDB is Windows-only. This project uses Docker to run SQL Server locally.
 
 ### Get a free OpenWeatherMap API key
 
@@ -45,52 +48,65 @@ A two-tier weather application built to showcase Azure DevOps CI/CD pipelines.
 
 ---
 
+## Local Database Setup (Docker)
+
+Start a SQL Server container before running the API. Only needed once — after that just `docker start weatherapp-sql`.
+
+```bash
+docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=WeatherApp@123" \
+  -p 1433:1433 --name weatherapp-sql \
+  -d mcr.microsoft.com/mssql/server:2022-latest
+```
+
+Wait ~15 seconds for SQL Server to fully start, then continue with backend setup.
+
+**On subsequent runs** (after a reboot):
+```bash
+docker start weatherapp-sql
+```
+
+---
+
 ## Backend Setup
 
-### 1. Restore packages
+### 1. Install the EF Core CLI (once)
+
+```bash
+dotnet tool install --global dotnet-ef
+export PATH="$PATH:/Users/$USER/.dotnet/tools"   # add to ~/.zprofile to make permanent
+```
+
+### 2. Restore packages
 
 ```bash
 cd backend
 dotnet restore
 ```
 
-### 2. Create appsettings.Development.json
+### 3. Create appsettings.Development.json
 
 ```bash
 cp WeatherApp.Api/appsettings.Development.json.example WeatherApp.Api/appsettings.Development.json
 ```
 
-Open the file and replace `YOUR_OPENWEATHERMAP_API_KEY_HERE` with your actual key.
+Open the file and replace `YOUR_OPENWEATHERMAP_API_KEY_HERE` with your actual key. The Docker connection string is already filled in.
 
-The file already has the LocalDB connection string — no changes needed for local dev.
-
-### 3. Run EF Core migrations
+### 4. Run EF Core migrations
 
 ```bash
 cd WeatherApp.Api
+dotnet ef migrations add InitialCreate --output-dir Migrations   # skip if Migrations/ folder already exists
 dotnet ef database update
 ```
 
-If `dotnet ef` is not installed:
+### 5. Start the API
 
 ```bash
-dotnet tool install --global dotnet-ef
+dotnet run
 ```
 
-To create a migration from scratch (only needed if you change the schema):
-
-```bash
-dotnet ef migrations add InitialCreate --output-dir Migrations
-```
-
-### 4. Start the API
-
-```bash
-dotnet run --project WeatherApp.Api
-```
-
-API will be available at **http://localhost:5000**.  
-Swagger UI: http://localhost:5000/swagger
+API runs at **http://localhost:5050**
+Swagger UI: **http://localhost:5050/swagger**
 
 ---
 
@@ -109,7 +125,7 @@ npm install
 cp .env.example .env
 ```
 
-The default `VITE_API_BASE_URL=http://localhost:5000` is already correct for local dev.
+The default `VITE_API_BASE_URL=http://localhost:5050` is already correct for local dev.
 
 ### 3. Start dev server
 
@@ -117,20 +133,20 @@ The default `VITE_API_BASE_URL=http://localhost:5000` is already correct for loc
 npm run dev
 ```
 
-Frontend will be available at **http://localhost:5173**.
+Frontend runs at **http://localhost:5173**
 
 ---
 
 ## Running Tests
 
-### Backend tests
+### Backend (20 tests)
 
 ```bash
 cd backend
 dotnet test --logger "console;verbosity=normal"
 ```
 
-### Frontend tests
+### Frontend (27 tests)
 
 ```bash
 cd frontend
@@ -161,7 +177,7 @@ npm test
   "description": "clear sky",
   "iconCode": "01d",
   "iconUrl": "https://openweathermap.org/img/wn/01d@2x.png",
-  "searchedAt": "2024-01-15T10:30:00Z"
+  "searchedAt": "2026-06-12T10:30:00Z"
 }
 ```
 
@@ -176,9 +192,14 @@ npm test
 
 ---
 
-## Azure Deployment Notes
+## Azure Deployment
 
-- All secrets are injected as **App Service Application Settings** (they override appsettings.json).
-- Set `ConnectionStrings__DefaultConnection` and `OpenWeatherMap__ApiKey` in Azure App Service config.
-- Set `AllowedOrigins__0` to your Azure Static Web App or CDN URL for CORS.
-- The frontend reads `VITE_API_BASE_URL` at **build time** — set it in the Azure DevOps pipeline variable group and pass it as a build argument.
+This app is designed to be deployed via Azure DevOps pipelines to Azure App Service.
+
+- Secrets are injected as **App Service Application Settings** — they override `appsettings.json` automatically.
+- Set `ConnectionStrings__DefaultConnection` to your Azure SQL Database connection string.
+- Set `OpenWeatherMap__ApiKey` to your API key.
+- Set `AllowedOrigins__0` to your deployed frontend URL (CORS).
+- The frontend reads `VITE_API_BASE_URL` at **build time** — pass it as a pipeline variable in Azure DevOps.
+
+See `ARCHITECTURE.md` for the full CI/CD pipeline design.

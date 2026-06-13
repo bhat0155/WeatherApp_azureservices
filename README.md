@@ -12,159 +12,94 @@ A two-tier weather application built to showcase Azure DevOps CI/CD pipelines.
 ## Architecture
 
 ```
-╔══════════════════════════════════════════════════════════════════════════════════════════════════════╗
-║                                        USER'S BROWSER                                               ║
-║                                                                                                      ║
-║   1. Types city name        2. Sees weather card          3. Sees recent searches                    ║
-║      in search box             with temp, humidity,          (last 10, clickable)                    ║
-║                                icon, description                                                     ║
-╚══════════════════════╦═══════════════════════════════════════════════════════════════════════════════╝
-                       ║
-                       ║  axios HTTP requests
-                       ║
-╔══════════════════════╩═══════════════════════════════════════════════════════════════════════════════╗
-║                              FRONTEND  —  React 18 + Vite  (localhost:5173)                         ║
-║                                                                                                      ║
-║   src/                                                                                               ║
-║   ├── App.jsx                  Root layout. Calls useWeather() hook for all state.                   ║
-║   │                                                                                                  ║
-║   ├── hooks/useWeather.js      Brain of the frontend. Manages:                                       ║
-║   │                            • weather (current result)   • loading (boolean)                      ║
-║   │                            • history (last 10 items)    • error (string or null)                 ║
-║   │                            Calls weatherApi.js for every HTTP interaction.                       ║
-║   │                                                                                                  ║
-║   ├── services/weatherApi.js   axios client. Base URL from VITE_API_BASE_URL env var.                ║
-║   │                            fetchWeather(city)  → GET  /api/weather/:city                         ║
-║   │                            fetchHistory()      → GET  /api/weather/history                       ║
-║   │                            clearHistory()      → DELETE /api/weather/history                     ║
-║   │                                                                                                  ║
-║   └── components/                                                                                    ║
-║       ├── SearchBar.jsx        Controlled input + submit button. Blocks empty input.                  ║
-║       ├── WeatherCard.jsx      Displays city, country, temp, feels like, humidity,                   ║
-║       │                        description, and OWM weather icon.                                    ║
-║       ├── HistoryList.jsx      Renders up to 10 past searches. Each item re-triggers search.         ║
-║       └── ErrorMessage.jsx     Shown only on error. role="alert" for accessibility.                  ║
-║                                                                                                      ║
-╚══════════════════════╦═══════════════════════════════════════════════════════════════════════════════╝
-                       ║
-         ┌─────────────╩──────────────────────────────────────┐
-         │                                                     │
-         │  GET /api/weather/London                            │  GET /api/weather/history
-         │  GET /api/health                                    │  DELETE /api/weather/history
-         │                                                     │
-         ▼                                                     ▼
-╔═════════════════════════════════════════════════════════════════════════════════════════════════════╗
-║                         BACKEND  —  ASP.NET Core 9 Web API  (localhost:5050)                        ║
-║                                                                                                      ║
-║  ┌─────────────────────────────────────────────────────────────────────────────────────────────┐    ║
-║  │  MIDDLEWARE PIPELINE  (every request passes through this in order)                          │    ║
-║  │                                                                                             │    ║
-║  │  1. GlobalExceptionMiddleware   Catches ALL unhandled exceptions from any layer.            │    ║
-║  │                                 CityNotFoundException    → 404 + JSON error body            │    ║
-║  │                                 ExternalServiceException → 503 + JSON error body            │    ║
-║  │                                 Anything else           → 500 + JSON error body             │    ║
-║  │                                 Always returns: { "error": "...", "statusCode": 404 }       │    ║
-║  │                                                                                             │    ║
-║  │  2. CORS Middleware             Checks the Origin header on every request.                  │    ║
-║  │                                 Allows: http://localhost:5173 (dev)                         │    ║
-║  │                                         https://your-azure-url (prod)                      │    ║
-║  │                                 Blocks all other origins.                                   │    ║
-║  │                                                                                             │    ║
-║  │  3. Routing → Controller        Matches URL pattern to the right controller method.         │    ║
-║  └─────────────────────────────────────────────────────────────────────────────────────────────┘    ║
-║                                              │                                                       ║
-║                                              ▼                                                       ║
-║  ┌─────────────────────────────────────────────────────────────────────────────────────────────┐    ║
-║  │  CONTROLLERS  (receive HTTP, validate input, return HTTP status codes)                      │    ║
-║  │                                                                                             │    ║
-║  │  WeatherController                          HealthController                                │    ║
-║  │  ├─ GET  /api/weather/{city}                └─ GET /api/health                             │    ║
-║  │  │       • rejects empty/whitespace city          returns 200 + timestamp                  │    ║
-║  │  │       • calls WeatherService                   used by Azure Monitor                    │    ║
-║  │  │       • returns 200 OK + WeatherResponseDto                                             │    ║
-║  │  │                                                                                         │    ║
-║  │  ├─ GET  /api/weather/history                                                              │    ║
-║  │  │       • calls WeatherService                                                            │    ║
-║  │  │       • returns 200 OK + WeatherResponseDto[]                                           │    ║
-║  │  │                                                                                         │    ║
-║  │  └─ DELETE /api/weather/history                                                            │    ║
-║  │          • calls WeatherService                                                            │    ║
-║  │          • returns 204 No Content                                                          │    ║
-║  └─────────────────────────────────────────────────────────────────────────────────────────────┘    ║
-║                                              │                                                       ║
-║                           injected by .NET Dependency Injection                                      ║
-║                                              ▼                                                       ║
-║  ┌─────────────────────────────────────────────────────────────────────────────────────────────┐    ║
-║  │  SERVICE LAYER  (all business logic lives here)                                             │    ║
-║  │                                                                                             │    ║
-║  │  WeatherService                                                                             │    ║
-║  │  ├─ GetWeatherAsync(city)                                                                   │    ║
-║  │  │       1. Build OWM URL using ApiKey from OpenWeatherMapOptions (IOptions pattern)        │    ║
-║  │  │       2. HttpClient.GetAsync(url)  ─────────────────────────────────────────────────────╫──► ║
-║  │  │       3. HTTP 404 from OWM? throw CityNotFoundException                                  ║    ║
-║  │  │       4. Network down?     throw ExternalServiceException                                ║    ║
-║  │  │       5. Parse JSON → build WeatherRecord entity                                         ║    ║
-║  │  │       6. repository.SaveAsync(record) → persists to DB                                   ║    ║
-║  │  │       7. Map entity → WeatherResponseDto → return                                        ║    ║
-║  │  │                                                                                         │    ║
-║  │  ├─ GetHistoryAsync()                                                                       │    ║
-║  │  │       repository.GetHistoryAsync(10) → map to DTOs → return                             │    ║
-║  │  │                                                                                         │    ║
-║  │  └─ ClearHistoryAsync()                                                                     │    ║
-║  │          repository.ClearHistoryAsync()                                                    │    ║
-║  └─────────────────────────────────────────────────────────────────────────────────────────────┘    ║
-║                                              │                                                       ║
-║                           injected by .NET Dependency Injection                                      ║
-║                                              ▼                                                       ║
-║  ┌─────────────────────────────────────────────────────────────────────────────────────────────┐    ║
-║  │  REPOSITORY LAYER  (only layer that touches the database)                                   │    ║
-║  │                                                                                             │    ║
-║  │  WeatherRepository                                                                          │    ║
-║  │  ├─ SaveAsync(record)         Sets SearchedAt=UtcNow, INSERT via EF Core                    │    ║
-║  │  ├─ GetHistoryAsync(n=10)     SELECT TOP 10 ORDER BY SearchedAt DESC                        │    ║
-║  │  └─ ClearHistoryAsync()       DELETE all rows                                               │    ║
-║  └─────────────────────────────────────────────────────────────────────────────────────────────┘    ║
-║                                              │                                                       ║
-║                                    EF Core translates                                                ║
-║                                    C# LINQ → SQL queries                                             ║
-║                                              │                                                       ║
-║  ┌─────────────────────────────────────────────────────────────────────────────────────────────┐    ║
-║  │  AppDbContext  (EF Core — one instance per HTTP request via DI)                             │    ║
-║  │  Reads connection string from appsettings → manages WeatherRecords DbSet                    │    ║
-║  │  Tracks changes, generates parameterized SQL, prevents SQL injection                        │    ║
-║  └───────────────────────────────────────┬─────────────────────────────────────────────────────┘    ║
-╚═══════════════════════════════════════════╬══════════════════════════════════════════════════════════╝
-                                            ║
-                                            ║  SQL over TCP port 1433
-                                            ▼
-╔═══════════════════════════════════════════════════════════════════════════════════════════════════╗
-║                     DATABASE  —  SQL Server 2022  (Docker locally / Azure SQL in prod)            ║
-║                                                                                                    ║
-║   Database: WeatherAppDb                                                                           ║
-║   Table: WeatherRecords                                                                            ║
-║                                                                                                    ║
-║   ┌────┬──────────────┬─────────┬─────────────┬───────────┬─────────────┬──────────┬───────────┐  ║
-║   │ Id │ City         │ Country │ Temperature │ FeelsLike │ Humidity    │ IconCode │SearchedAt │  ║
-║   ├────┼──────────────┼─────────┼─────────────┼───────────┼─────────────┼──────────┼───────────┤  ║
-║   │  1 │ London       │ GB      │ 15.5        │ 13.0      │ 80          │ 01d      │ 2026-06.. │  ║
-║   │  2 │ Ottawa       │ CA      │  8.2        │  5.1      │ 65          │ 13d      │ 2026-06.. │  ║
-║   │  3 │ Tokyo        │ JP      │ 28.1        │ 31.2      │ 74          │ 03d      │ 2026-06.. │  ║
-║   └────┴──────────────┴─────────┴─────────────┴───────────┴─────────────┴──────────┴───────────┘  ║
-║                                                                                                    ║
-║   Migration history tracked in __EFMigrationsHistory table (managed by EF Core automatically)     ║
-╚═══════════════════════════════════════════════════════════════════════════════════════════════════╝
+                          ┌──────────────────────────────┐
+                          │         BROWSER              │
+                          │   User searches a city       │
+                          └──────────────┬───────────────┘
+                                         │ HTTP (axios)
+                                         │
+                    ┌────────────────────▼───────────────────┐
+                    │     FRONTEND  –  React + Vite          │
+                    │           localhost:5173                │
+                    │                                        │
+                    │  SearchBar → useWeather hook           │
+                    │  WeatherCard  │  HistoryList           │
+                    │  ErrorMessage │  weatherApi.js         │
+                    └──────┬─────────────────────┬──────────┘
+                           │                     │
+              GET /api/weather/{city}    GET /api/weather/history
+              GET /api/health           DELETE /api/weather/history
+                           │                     │
+                    ┌──────▼─────────────────────▼──────────┐
+                    │      BACKEND  –  ASP.NET Core 9        │
+                    │            localhost:5050               │
+                    │                                        │
+                    │  Middleware  →  Controller             │
+                    │  (CORS, errors)   (routing, 400s)      │
+                    │       │                                │
+                    │  WeatherService  (business logic)      │
+                    │       │                                │
+                    │  WeatherRepository  (DB access only)   │
+                    │       │              EF Core ORM       │
+                    └──────┬────────────────────────────────┘
+                           │                    │
+               SQL port 1433                HTTPS
+                           │                    │
+           ┌───────────────▼──────┐   ┌─────────▼──────────────────┐
+           │  SQL SERVER          │   │  OpenWeatherMap API         │
+           │  Docker / Azure SQL  │   │  api.openweathermap.org     │
+           │                      │   │                             │
+           │  DB: WeatherAppDb    │   │  GET /data/2.5/weather      │
+           │  Table: WeatherRecords│  │  ?q={city}&appid={key}      │
+           └──────────────────────┘   └─────────────────────────────┘
+```
 
-                                  ▲  (HttpClient call from WeatherService)
-                                  │
-╔═════════════════════════════════╩═════════════════════════════════════════════════════════════════╗
-║                    EXTERNAL  —  OpenWeatherMap API  (api.openweathermap.org)                       ║
-║                                                                                                    ║
-║   Endpoint used:  GET /data/2.5/weather?q={city}&appid={key}&units=metric                         ║
-║   Auth:           API key as query param (stored in appsettings, never exposed to browser)         ║
-║   Response:       JSON with name, sys.country, main.temp, main.feels_like,                        ║
-║                   main.humidity, weather[0].description, weather[0].icon                          ║
-║   Error cases:    404 → city not found   |   5xx / timeout → service unavailable                  ║
-╚═══════════════════════════════════════════════════════════════════════════════════════════════════╝
+---
+
+## Request Flow
+
+**Search a city (happy path):**
+
+```
+Browser → SearchBar → useWeather.search("London")
+       → weatherApi.fetchWeather("London")
+       → GET /api/weather/London  (port 5050)
+
+Backend:
+  CORS middleware    checks Origin header ✓
+  GlobalException    wraps everything (error safety net)
+  WeatherController  validates city is not empty
+  WeatherService     calls OpenWeatherMap API (HTTPS)
+                     parses JSON response
+                     saves WeatherRecord to DB via Repository
+                     returns WeatherResponseDto
+  WeatherController  returns 200 OK + JSON
+
+Frontend:
+  useWeather         sets weather state
+                     fetches history to refresh the list
+  WeatherCard        renders result
+  HistoryList        renders updated last 10 searches
+```
+
+**If the city doesn't exist:**
+
+```
+OpenWeatherMap returns 404
+  → WeatherService throws CityNotFoundException
+  → GlobalExceptionMiddleware catches it
+  → Returns { "error": "City not found", "statusCode": 404 }
+  → useWeather sets error state
+  → ErrorMessage component renders the red alert
+```
+
+**If OpenWeatherMap is down:**
+
+```
+HttpClient throws network error
+  → WeatherService throws ExternalServiceException
+  → GlobalExceptionMiddleware catches it
+  → Returns { "error": "Service unavailable", "statusCode": 503 }
 ```
 
 ---

@@ -12,18 +12,20 @@ A two-tier weather application built to showcase Azure DevOps CI/CD pipelines.
 ## Architecture
 
 ```
-┌─────────────────┐       HTTP        ┌──────────────────────┐
-│  React (Vite)   │ ────────────────► │  ASP.NET Core API    │
-│  :5173          │                   │  :5050               │
-└─────────────────┘                   │  ┌────────────────┐  │
+┌─────────────────┐     HTTP GET      ┌──────────────────────┐     HTTPS GET      ┌─────────────────────┐
+│  React (Vite)   │ ────────────────► │  ASP.NET Core API    │ ─────────────────► │  OpenWeatherMap API │
+│  :5173          │ ◄──────────────── │  :5050               │ ◄───────────────── │  api.openweather..  │
+└─────────────────┘     JSON resp     │                      │     JSON resp       └─────────────────────┘
+                                      │  ┌────────────────┐  │
                                       │  │  EF Core ORM   │  │
-                    HTTPS             │  └────────┬───────┘  │
-                ┌────────────────────►│           │          │
-                │  OpenWeatherMap API │  ┌────────▼───────┐  │
-                └────────────────────┘  │  SQL Server    │  │
-                                        │  (Docker local/│  │
-                                        │   Azure SQL)   │  │
-                                        └────────────────┘  │
+                                      │  └────────┬───────┘  │
+                                      └───────────┼──────────┘
+                                                  │ SQL (port 1433)
+                                                  ▼
+                                      ┌──────────────────────┐
+                                      │  SQL Server          │
+                                      │  Docker / Azure SQL  │
+                                      │  WeatherAppDb        │
                                       └──────────────────────┘
 ```
 

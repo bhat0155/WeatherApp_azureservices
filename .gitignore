@@ -28,6 +28,9 @@ coverage/
 *.mdf
 *.ldf
 
+# Internal planning — not for repo
+roadmap/
+
 # OS
 .DS_Store
 Thumbs.db

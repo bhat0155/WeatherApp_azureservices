@@ -1,0 +1,83 @@
+.container {
+  margin-top: 1.5rem;
+}
+
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.heading {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #4b5563;
+  margin: 0 0 0.75rem;
+}
+
+.empty {
+  color: #9ca3af;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.clearBtn {
+  background: none;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8rem;
+  color: #6b7280;
+  cursor: pointer;
+  margin-bottom: 0.75rem;
+  transition: all 0.2s;
+}
+
+.clearBtn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.item {
+  width: 100%;
+}
+
+.cityBtn {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 0.75rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+}
+
+.cityBtn:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.cityName {
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.temp {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #3b82f6;
+}

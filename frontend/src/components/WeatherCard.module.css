@@ -1,0 +1,67 @@
+.card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.city {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.country {
+  margin: 0.25rem 0 0;
+  font-size: 1rem;
+  opacity: 0.85;
+}
+
+.icon {
+  width: 80px;
+  height: 80px;
+}
+
+.description {
+  margin: 0.75rem 0;
+  text-transform: capitalize;
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+
+.stats {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.stat {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.label {
+  display: block;
+  font-size: 0.75rem;
+  opacity: 0.8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.value {
+  display: block;
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-top: 0.25rem;
+}

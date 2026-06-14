@@ -21,17 +21,12 @@ builder.Services.AddHttpClient<IWeatherService, WeatherService>();
 // Repositories & Services
 builder.Services.AddScoped<IWeatherRepository, WeatherRepository>();
 
-// CORS — allow React dev server and any Azure-hosted frontend
+// CORS — open for all origins (portfolio demo)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        var raw = builder.Configuration["AllowedOrigins"]
-                  ?? "http://localhost:5173,http://localhost:3000";
-        var allowedOrigins = raw.Split(',', StringSplitOptions.RemoveEmptyEntries
-                                          | StringSplitOptions.TrimEntries);
-
-        policy.WithOrigins(allowedOrigins)
+        policy.AllowAnyOrigin()
               .AllowAnyHeader()
               .AllowAnyMethod();
     });

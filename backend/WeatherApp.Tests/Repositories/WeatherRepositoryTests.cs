@@ -89,6 +89,32 @@ public class WeatherRepositoryTests
     }
 
     [Fact]
+    public async Task SaveAsync_UpdatesExistingRecord_WhenCityAlreadyExists()
+    {
+        using var db = CreateInMemoryDb();
+        var repo = new WeatherRepository(db);
+
+        await repo.SaveAsync(new WeatherRecord { City = "Delhi", Country = "IN", Temperature = 38.0, Humidity = 60, Description = "haze", IconCode = "50d" });
+        await repo.SaveAsync(new WeatherRecord { City = "Delhi", Country = "IN", Temperature = 40.0, Humidity = 65, Description = "sunny", IconCode = "01d" });
+
+        db.WeatherRecords.Should().HaveCount(1);
+        db.WeatherRecords.Single().Temperature.Should().Be(40.0);
+        db.WeatherRecords.Single().Description.Should().Be("sunny");
+    }
+
+    [Fact]
+    public async Task SaveAsync_IsCaseInsensitive_WhenMatchingCity()
+    {
+        using var db = CreateInMemoryDb();
+        var repo = new WeatherRepository(db);
+
+        await repo.SaveAsync(new WeatherRecord { City = "delhi", Country = "IN", Temperature = 38.0 });
+        await repo.SaveAsync(new WeatherRecord { City = "Delhi", Country = "IN", Temperature = 40.0 });
+
+        db.WeatherRecords.Should().HaveCount(1);
+    }
+
+    [Fact]
     public async Task ClearHistoryAsync_RemovesAllRecords()
     {
         using var db = CreateInMemoryDb();

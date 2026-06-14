@@ -78,7 +78,7 @@ stages:
                 -ConnectionStrings__DefaultConnection "$(SQL_CONNECTION_STRING)"
                 -OpenWeatherMap__ApiKey "$(OWM_API_KEY)"
                 -OpenWeatherMap__BaseUrl "https://api.openweathermap.org/data/2.5"
-                -AllowedOrigins__0 "$(VITE_API_BASE_URL)"
+                -AllowedOrigins__0 "$(FRONTEND_URL)"
     
   - deployment: Frontend
     displayName: 'Frontend → weatherapp-frontend-dev'
@@ -139,7 +139,7 @@ stages:
                 -ConnectionStrings__DefaultConnection "$(SQL_CONNECTION_STRING)"
                 -OpenWeatherMap__ApiKey "$(OWM_API_KEY)"
                 -OpenWeatherMap__BaseUrl "https://api.openweathermap.org/data/2.5"
-                -AllowedOrigins__0 "$(VITE_API_BASE_URL)"
+                -AllowedOrigins__0 "$(FRONTEND_URL)"
 
   - deployment: Frontend
     displayName: 'Frontend → weatherapp-frontend-staging'
@@ -200,7 +200,7 @@ stages:
                 -ConnectionStrings__DefaultConnection "$(SQL_CONNECTION_STRING)"
                 -OpenWeatherMap__ApiKey "$(OWM_API_KEY)"
                 -OpenWeatherMap__BaseUrl "https://api.openweathermap.org/data/2.5"
-                -AllowedOrigins__0 "$(VITE_API_BASE_URL)"
+                -AllowedOrigins__0 "$(FRONTEND_URL)"
 
   - deployment: Frontend
     displayName: 'Frontend → weatherapp-frontend-prod'

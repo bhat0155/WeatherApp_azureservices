@@ -1,0 +1,63 @@
+# ── DEPLOYMENT ───────────────────────────────────────────────────────────────
+# Tells Kubernetes: keep 2 copies of the API pod running at all times.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weatherapp-api
+  namespace: weatherapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: weatherapp-api       # Deployment manages pods with this label
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1               # allow 1 extra pod during update (3 pods briefly)
+      maxUnavailable: 0         # never drop below 2 healthy pods during update
+
+  # ── POD TEMPLATE ─────────────────────────────────────────────────────────
+  # Blueprint for every pod this Deployment creates.
+  template:
+    metadata:
+      labels:
+        app: weatherapp-api     # must match selector.matchLabels above
+    spec:
+      containers:
+      - name: api
+        image: ACR_LOGIN_SERVER/weatherapp-api:IMAGE_TAG   # sed replaces both at deploy time
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: weatherapp-config     # inject all ConfigMap keys as env vars
+        env:
+        - name: ConnectionStrings__DefaultConnection
+          valueFrom:
+            secretKeyRef:
+              name: weatherapp-secrets  # pipeline creates this secret at deploy time
+              key: sql-connection-string
+        - name: OpenWeatherMap__ApiKey
+          valueFrom:
+            secretKeyRef:
+              name: weatherapp-secrets
+              key: owm-api-key
+        resources:
+          requests:
+            cpu: "100m"         # 0.1 CPU guaranteed to this pod
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"     # pod is OOM-killed if it exceeds this
+        readinessProbe:         # pod only receives traffic once this passes
+          httpGet:
+            path: /api/health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        livenessProbe:          # pod is restarted if this starts failing
+          httpGet:
+            path: /api/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 30

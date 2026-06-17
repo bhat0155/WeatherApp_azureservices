@@ -1,0 +1,36 @@
+# ── DEPLOYMENT ───────────────────────────────────────────────────────────────
+# Tells Kubernetes: keep 2 copies of the frontend pod running at all times.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weatherapp-frontend
+  namespace: weatherapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: weatherapp-frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  # ── POD TEMPLATE ─────────────────────────────────────────────────────────
+  template:
+    metadata:
+      labels:
+        app: weatherapp-frontend  # must match selector.matchLabels above
+    spec:
+      containers:
+      - name: frontend
+        image: ACR_LOGIN_SERVER/weatherapp-frontend:IMAGE_TAG  # sed replaces both at deploy time
+        ports:
+        - containerPort: 80       # nginx listens on 80 inside the container
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "64Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"

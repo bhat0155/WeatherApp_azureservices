@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: weatherapp-ingress
+  namespace: weatherapp
+  annotations:
+    kubernetes.io/ingress.class: "nginx" # tells nginx ingress controller to handle this
+spec:
+  rules:
+  -  http:
+      paths:
+        - path: /api #any ereq starting with /api will go to api
+          pathType: Prefix
+          backend:
+            service:
+              name: weatherapp-api-svc
+              port:
+                number: 80
+        - path: / #all other traffic goes to frontend
+          pathType: Prefix
+          backend:
+            service:
+              name: weatherapp-frontend-svc
+              port:
+                number: 80

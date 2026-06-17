@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: weatherapp-config
+  namespace: weatherapp
+data:
+    ASPNETCORE_ENVIRONMENT: "Production"
+    OpenWeatherMap__BaseUrl: "https://api.openweathermap.org/data/2.5"
+    ASPNETCORE_URLS: "http://+:8080"   # tells .NET to listen on all interfaces on 8080

@@ -7,12 +7,11 @@ COPY WeatherApp.sln .
 COPY WeatherApp.Api/WeatherApp.Api.csproj WeatherApp.Api/
 COPY WeatherApp.Tests/WeatherApp.Tests.csproj WeatherApp.Tests/
 
-RUN dotnet restore WeatherApp.sln
+RUN dotnet restore WeatherApp.Api/WeatherApp.Api.csproj
 
 COPY . .
 
 RUN dotnet publish WeatherApp.Api/WeatherApp.Api.csproj \
-      --no-restore \
       --configuration Release \
       --output /app/publish
 

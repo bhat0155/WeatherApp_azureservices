@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Prometheus;
 using WeatherApp.Api.Configuration;
 using WeatherApp.Api.Data;
 using WeatherApp.Api.Middleware;

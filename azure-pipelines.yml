@@ -49,3 +49,48 @@ stages:
       inputs:
         testResultsFormat: 'VSTest'
         testResultsFiles: '$(Agent.TempDirectory)/test-results/*.trx'
+
+# stage 2: docker build and push
+# build docker images for api and frontend and push to acr
+# variables will come from variable group
+
+- stage: DockerBuild
+  displayName: 'Build and Push Docker Images'
+  dependsOn: Build
+  condition: succeeded()
+  variables:
+    - group: weatherapp-vars-dev # acr login, acr username and acr password live here
+  jobs:
+  - job: BuildAndPush
+    displayName: 'Build api and frontend images'
+    steps:
+    - script: |
+          docker login $(ACR_LOGIN_SERVER) \
+            --username $(ACR_USERNAME) \
+            --password $(ACR_PASSWORD)
+      displayName: 'Login to ACR'
+
+      # build api image from backend/Dockerfile
+      # two tags are pushed:
+      # :$(imageTag) - imutable tied to build, used by deployments
+      # :latest - convenience pointer, always points to latest build
+    - script: |
+          docker build \
+            -t $(ACR_LOGIN_SERVER)/weatherapp-api:$(imageTag) \
+            -t $(ACR_LOGIN_SERVER)/weatherapp-api:latest \
+            backend/
+          docker push $(ACR_LOGIN_SERVER)/weatherapp-api:$(imageTag)
+          docker push $(ACR_LOGIN_SERVER)/weatherapp-api:latest
+      displayName: 'Build and Push API image'
+
+      # build frontend image from frontend/Dockerfile
+      # vite_api_base_url is needed at build time for the frontend to know where the api is
+    - script: |
+          docker build \
+            --build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
+            -t $(ACR_LOGIN_SERVER)/weatherapp-frontend:$(imageTag) \
+            -t $(ACR_LOGIN_SERVER)/weatherapp-frontend:latest \
+            frontend/
+          docker push $(ACR_LOGIN_SERVER)/weatherapp-frontend:$(imageTag)
+          docker push $(ACR_LOGIN_SERVER)/weatherapp-frontend:latest
+      displayName: 'Build and Push Frontend image'

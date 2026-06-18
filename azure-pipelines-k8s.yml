@@ -1,0 +1,51 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  imageTag: '$(Build.BuildId)'
+
+# Stage 1 Build and test
+stages:
+- stage: Build
+  displayName: 'Build and Test'
+  jobs:
+  - job: Backend
+    displayName: 'Backend'
+    steps:
+    # pin the sdk version
+    - task: UseDotNet@2
+      displayName: 'Use .NET 9'
+      inputs:
+        packageType: 'sdk'
+        version: '9.x'
+    # restore nuget packages
+    - script: dotnet restore
+      workingDirectory: backend
+      displayName: 'Restore Backend'
+
+      # compile in release mode. --no-restore reuses the packages from prev step
+    - script: dotnet build --no-restore --configuration Release
+      workingDirectory: backend
+      displayName: 'Build dotnet'
+
+      # run unit tests. --no-build reuses binaries
+      # --loggertrx writes results in vstest format for publish test
+      # non zero exit from a failed test stops pipeline.
+    - script: |
+        dotnet test --no-build --configuration Release \
+          --logger trx \
+          --results-directory $(Agent.TempDirectory)/test-results
+      workingDirectory: backend
+      displayName: 'dotnet test (gate)'
+
+    #publish .trx test so devops show pass/fail and test details
+    - task: PublishTestResults@2
+      displayName: 'Publish Test Results'
+      inputs:
+        testResultsFormat: 'VSTest'
+        testResultsFiles: '$(Agent.TempDirectory)/test-results/*.trx'

@@ -94,3 +94,93 @@ stages:
           docker push $(ACR_LOGIN_SERVER)/weatherapp-frontend:$(imageTag)
           docker push $(ACR_LOGIN_SERVER)/weatherapp-frontend:latest
       displayName: 'Build and Push Frontend image'
+
+# ─── STAGE 3: DEPLOY → DEV ───────────────────────────────────────────────────
+# Purpose: deploy the freshly-built images to the AKS dev cluster.
+# Only runs if Stage 2 (Docker build + push) succeeded.
+- stage: DeployDev
+  displayName: 'Deploy to Dev'
+  dependsOn: DockerBuild
+  condition: succeeded()
+  variables:
+    - group: weatherapp-vars-dev   # AKS_RESOURCE_GROUP, AKS_CLUSTER_NAME, secrets live here
+  jobs:
+
+  # 'deployment' (not 'job') gives environment tracking, approval gates,
+  # and deployment history in Azure DevOps.
+  - deployment: DeployDev
+    displayName: 'Deploy to AKS Dev'
+    environment: 'aks-dev'        # links to the aks-dev environment in Azure DevOps
+    strategy:
+      runOnce:                    # run steps once — no canary or blue/green here
+        deploy:
+          steps:
+
+          # Deployment jobs do NOT auto-checkout the repo unlike regular jobs.
+          # Without this the k8s/ folder is missing and kubectl apply -f k8s/ fails.
+          - checkout: self
+
+          # All kubectl commands are inside one AzureCLI@2 task.
+          # Reason: az aks get-credentials writes auth to ~/.kube/config.
+          # That auth context is not guaranteed to survive across separate steps.
+          # One task = one shell = context always valid.
+          - task: AzureCLI@2
+            displayName: 'Deploy to AKS'
+            inputs:
+              azureSubscription: 'azure-service-connection'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                set -e   # stop immediately if any command exits non-zero
+
+                # Pull AKS credentials onto the agent so kubectl knows which
+                # cluster to talk to. --overwrite-existing handles re-runs safely.
+                az aks get-credentials \
+                  --resource-group $(AKS_RESOURCE_GROUP) \
+                  --name $(AKS_CLUSTER_NAME) \
+                  --overwrite-existing
+
+                # Apply namespace first — everything else lives inside it.
+                # ConfigMap holds non-secret env vars (URLs, env name).
+                kubectl apply -f k8s/namespace.yaml
+                kubectl apply -f k8s/configmap.yaml
+
+                # Create the Kubernetes Secret from Variable Group values.
+                # --dry-run=client -o yaml | kubectl apply -f - is idempotent:
+                #   - secret missing → creates it
+                #   - secret exists  → updates it
+                # Never commit a secret.yaml — this command IS the secret.
+                kubectl create secret generic weatherapp-secrets \
+                  --from-literal=sql-connection-string="$(SQL_CONNECTION_STRING)" \
+                  --from-literal=owm-api-key="$(OWM_API_KEY)" \
+                  --namespace weatherapp \
+                  --dry-run=client -o yaml | kubectl apply -f -
+
+                # Services and Ingress are stable — safe to apply every run.
+                kubectl apply -f k8s/api-service.yaml
+                kubectl apply -f k8s/frontend-service.yaml
+                kubectl apply -f k8s/ingress.yaml
+
+                # Replace placeholders in-stream — no files on disk are modified.
+                # kubectl apply -f - means kubectl reads the result from stdin.
+                sed -e 's/IMAGE_TAG/$(imageTag)/g' \
+                    -e 's|ACR_LOGIN_SERVER|$(ACR_LOGIN_SERVER)|g' \
+                    k8s/api-deployment.yaml | kubectl apply -f -
+
+                sed -e 's/IMAGE_TAG/$(imageTag)/g' \
+                    -e 's|ACR_LOGIN_SERVER|$(ACR_LOGIN_SERVER)|g' \
+                    k8s/frontend-deployment.yaml | kubectl apply -f -
+
+                # Block until both rolling updates finish.
+                # --timeout=5m fails the pipeline if pods don't become healthy in time.
+                kubectl rollout status deployment/weatherapp-api \
+                  -n weatherapp --timeout=5m
+                kubectl rollout status deployment/weatherapp-frontend \
+                  -n weatherapp --timeout=5m
+
+                # Give Ingress a moment to register the new pods, then smoke test.
+                # curl -f exits non-zero on HTTP 4xx/5xx — without -f curl returns 0
+                # even on a 503, hiding a broken deploy.
+                sleep 15
+                curl -f http://$(INGRESS_EXTERNAL_IP)/api/health
+                echo "Smoke test passed"

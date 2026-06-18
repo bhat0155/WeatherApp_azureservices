@@ -53,8 +53,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
 app.UseCors("AllowFrontend");
+app.UseHttpMetrics();
 app.UseAuthorization();
 app.MapControllers();
+app.MapMetrics();
 
 app.Run();
 

@@ -1,110 +1,147 @@
 # WeatherApp
 
-A two-tier weather application built to showcase Azure DevOps CI/CD pipelines.
+A containerized two-tier weather application deployed to Azure Kubernetes Service (AKS) via an Azure DevOps CI/CD pipeline with full observability.
 
-- **Backend**: ASP.NET Core 9 Web API + Entity Framework Core + SQL Server
-- **Frontend**: React 18 + Vite
+- **Backend**: ASP.NET Core 9 Web API + Entity Framework Core + Azure SQL
+- **Frontend**: React 18 + Vite, served by NGINX
 - **External data**: OpenWeatherMap API (free tier)
 - **Tests**: 20 backend (xUnit) + 27 frontend (Vitest)
+- **Registry**: Azure Container Registry (ACR)
+- **Cluster**: AKS with NGINX Ingress Controller
+- **Monitoring**: Azure Monitor Container Insights + Prometheus + Grafana
 
 ---
 
 ## Architecture
 
 ```
-                          ┌──────────────────────────────┐
-                          │         BROWSER              │
-                          │   User searches a city       │
-                          └──────────────┬───────────────┘
-                                         │ HTTP (axios)
-                                         │
-                    ┌────────────────────▼───────────────────┐
-                    │     FRONTEND  –  React + Vite          │
-                    │           localhost:5173                │
-                    │                                        │
-                    │  SearchBar → useWeather hook           │
-                    │  WeatherCard  │  HistoryList           │
-                    │  ErrorMessage │  weatherApi.js         │
-                    └──────┬─────────────────────┬──────────┘
-                           │                     │
-              GET /api/weather/{city}    GET /api/weather/history
-              GET /api/health           DELETE /api/weather/history
-                           │                     │
-                    ┌──────▼─────────────────────▼──────────┐
-                    │      BACKEND  –  ASP.NET Core 9        │
-                    │            localhost:5050               │
-                    │                                        │
-                    │  Middleware  →  Controller             │
-                    │  (CORS, errors)   (routing, 400s)      │
-                    │       │                                │
-                    │  WeatherService  (business logic)      │
-                    │       │                                │
-                    │  WeatherRepository  (DB access only)   │
-                    │       │              EF Core ORM       │
-                    └──────┬────────────────────────────────┘
-                           │                    │
-               SQL port 1433                HTTPS
-                           │                    │
-           ┌───────────────▼──────┐   ┌─────────▼──────────────────┐
-           │  SQL SERVER          │   │  OpenWeatherMap API         │
-           │  Docker / Azure SQL  │   │  api.openweathermap.org     │
-           │                      │   │                             │
-           │  DB: WeatherAppDb    │   │  GET /data/2.5/weather      │
-           │  Table: WeatherRecords│  │  ?q={city}&appid={key}      │
-           └──────────────────────┘   └─────────────────────────────┘
+                        git push to main
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │   Azure DevOps      │
+                    │   CI/CD Pipeline    │
+                    │                     │
+                    │  Stage 1: Build     │
+                    │  dotnet test (gate) │
+                    │                     │
+                    │  Stage 2: Docker    │
+                    │  build + push → ACR │
+                    │                     │
+                    │  Stage 3: Deploy    │
+                    │  kubectl apply      │
+                    │  rolling update     │
+                    │  smoke test         │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+              ┌────────────────────────────────┐
+              │   Azure Container Registry     │
+              │   weatherapp-api:buildId        │
+              │   weatherapp-frontend:buildId   │
+              └────────────────┬───────────────┘
+                               │ AKS pulls images
+                               ▼
+┌──────────────────────────────────────────────────────────┐
+│                    AKS CLUSTER                           │
+│                                                          │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │  NGINX Ingress Controller  (public IP)           │    │
+│  │  /api/* → weatherapp-api-svc                    │    │
+│  │  /      → weatherapp-frontend-svc               │    │
+│  └───────────────┬────────────────┬────────────────┘    │
+│                  │                │                      │
+│    ┌─────────────▼──────┐  ┌──────▼──────────────┐     │
+│    │  weatherapp-api     │  │  weatherapp-frontend │     │
+│    │  2 pods (replicas)  │  │  2 pods (replicas)  │     │
+│    │  .NET 9 API         │  │  NGINX + React SPA  │     │
+│    │  port 8080          │  │  port 80            │     │
+│    │  /metrics ←─────────┼──┼── Prometheus scrape │     │
+│    └────────┬────────────┘  └─────────────────────┘     │
+│             │                                            │
+│             ▼                                            │
+│    ┌─────────────────┐   ┌──────────────────────────┐   │
+│    │  Azure SQL      │   │  monitoring namespace     │   │
+│    │  (external)     │   │  Prometheus               │   │
+│    └─────────────────┘   │  Grafana                  │   │
+│                          │  Alertmanager             │   │
+│                          │  Node Exporter (DaemonSet)│   │
+│                          └──────────────────────────┘   │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Request Flow
+## CI/CD Pipeline
 
-**Search a city (happy path):**
+Three stages — each gates the next:
 
-```
-Browser → SearchBar → useWeather.search("London")
-       → weatherApi.fetchWeather("London")
-       → GET /api/weather/London  (port 5050)
+| Stage | What happens | Time |
+|---|---|---|
+| **Build & Test** | `dotnet restore` → `dotnet build` → `dotnet test` (20 tests, gate) → publish results | ~1.5 min |
+| **DockerBuild** | Login to ACR → build API image → build Frontend image (with `VITE_API_BASE_URL` baked in) → push both with `buildId` and `latest` tags | ~4 min |
+| **DeployDev** | `az aks get-credentials` → apply namespace/configmap/secret → `sed` image tags into manifests → `kubectl apply` → `kubectl rollout status --timeout=5m` → `curl /api/health` smoke test | ~3 min |
 
-Backend:
-  CORS middleware    checks Origin header ✓
-  GlobalException    wraps everything (error safety net)
-  WeatherController  validates city is not empty
-  WeatherService     calls OpenWeatherMap API (HTTPS)
-                     parses JSON response
-                     saves WeatherRecord to DB via Repository
-                     returns WeatherResponseDto
-  WeatherController  returns 200 OK + JSON
+**Total: ~9 minutes from push to live. Zero manual steps.**
 
-Frontend:
-  useWeather         sets weather state
-                     fetches history to refresh the list
-  WeatherCard        renders result
-  HistoryList        renders updated last 10 searches
-```
-
-**If the city doesn't exist:**
-
-```
-OpenWeatherMap returns 404
-  → WeatherService throws CityNotFoundException
-  → GlobalExceptionMiddleware catches it
-  → Returns { "error": "City not found", "statusCode": 404 }
-  → useWeather sets error state
-  → ErrorMessage component renders the red alert
-```
-
-**If OpenWeatherMap is down:**
-
-```
-HttpClient throws network error
-  → WeatherService throws ExternalServiceException
-  → GlobalExceptionMiddleware catches it
-  → Returns { "error": "Service unavailable", "statusCode": 503 }
-```
+Rolling update strategy (`maxUnavailable: 0`, `maxSurge: 1`): a new pod starts and passes its readiness probe before an old pod is terminated. Traffic is never dropped.
 
 ---
 
-## Prerequisites
+## Repository Structure
+
+```
+weather-app/
+├── backend/
+│   ├── Dockerfile                   ← multi-stage build (.NET SDK → runtime)
+│   └── WeatherApp.Api/
+│       ├── Program.cs               ← UseHttpMetrics() + MapMetrics() for Prometheus
+│       └── WeatherApp.Api.csproj    ← prometheus-net.AspNetCore NuGet package
+├── frontend/
+│   ├── Dockerfile                   ← multi-stage build (Node → NGINX)
+│   ├── nginx.conf                   ← try_files for SPA routing
+│   └── src/
+├── k8s/
+│   ├── namespace.yaml
+│   ├── configmap.yaml
+│   ├── api-deployment.yaml          ← IMAGE_TAG placeholder replaced by pipeline sed
+│   ├── api-service.yaml             ← ClusterIP, named port (required by ServiceMonitor)
+│   ├── frontend-deployment.yaml
+│   ├── frontend-service.yaml
+│   ├── ingress.yaml                 ← /api → backend, / → frontend
+│   └── servicemonitor.yaml          ← Prometheus scrape config via Operator CRD
+├── docker-compose.yml               ← full local stack (db + api + frontend)
+├── azure-pipelines.yml              ← 3-stage pipeline
+└── azure-pipelines-project1.yml     ← original App Service pipeline (preserved)
+```
+
+> `secret.yaml` is **not in the repo**. The pipeline creates the Kubernetes Secret at deploy time using values from the Azure DevOps Variable Group. Committing a secret file risks it being applied by `kubectl apply -f k8s/` and overwriting the real secret.
+
+---
+
+## Local Development
+
+### Option A — Docker Compose (recommended)
+
+Runs all three services (SQL Server, API, frontend) with one command. No local .NET or Node install required.
+
+```bash
+# Create a .env file at the repo root
+echo "OWM_API_KEY=your_openweathermap_key" > .env
+
+# Build and start everything
+docker-compose up --build
+
+# API:      http://localhost:5050
+# Frontend: http://localhost:3000
+
+# Stop
+docker-compose down
+```
+
+### Option B — Run services individually
+
+**Prerequisites:**
 
 | Tool | Version |
 |------|---------|
@@ -113,19 +150,7 @@ HttpClient throws network error
 | Docker Desktop | Latest (for SQL Server) |
 | OpenWeatherMap API key | Free at openweathermap.org |
 
-> **macOS note:** LocalDB is Windows-only. This project uses Docker to run SQL Server locally.
-
-### Get a free OpenWeatherMap API key
-
-1. Go to https://openweathermap.org/api and create a free account.
-2. Go to **API Keys** in your account dashboard.
-3. Copy the default key (active within ~10 minutes of account creation).
-
----
-
-## Local Database Setup (Docker)
-
-Start a SQL Server container before running the API. Only needed once — after that just `docker start weatherapp-sql`.
+**1. Start SQL Server:**
 
 ```bash
 docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=WeatherApp@123" \
@@ -133,97 +158,46 @@ docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=WeatherApp@123" \
   -d mcr.microsoft.com/mssql/server:2022-latest
 ```
 
-Wait ~15 seconds for SQL Server to fully start, then continue with backend setup.
-
-**On subsequent runs** (after a reboot):
-```bash
-docker start weatherapp-sql
-```
-
----
-
-## Backend Setup
-
-### 1. Install the EF Core CLI (once)
-
-```bash
-dotnet tool install --global dotnet-ef
-export PATH="$PATH:/Users/$USER/.dotnet/tools"   # add to ~/.zprofile to make permanent
-```
-
-### 2. Restore packages
+**2. Backend:**
 
 ```bash
 cd backend
+
+# Install EF Core CLI (once)
+dotnet tool install --global dotnet-ef
+
 dotnet restore
-```
 
-### 3. Create appsettings.Development.json
-
-```bash
+# Copy and fill in dev config
 cp WeatherApp.Api/appsettings.Development.json.example WeatherApp.Api/appsettings.Development.json
-```
+# Set your OWM API key in the file
 
-Open the file and replace `YOUR_OPENWEATHERMAP_API_KEY_HERE` with your actual key. The Docker connection string is already filled in.
-
-### 4. Run EF Core migrations
-
-```bash
 cd WeatherApp.Api
-dotnet ef migrations add InitialCreate --output-dir Migrations   # skip if Migrations/ folder already exists
 dotnet ef database update
-```
-
-### 5. Start the API
-
-```bash
 dotnet run
+# API: http://localhost:5050
 ```
 
-API runs at **http://localhost:5050**
-Swagger UI: **http://localhost:5050/swagger**
-
----
-
-## Frontend Setup
-
-### 1. Install dependencies
+**3. Frontend:**
 
 ```bash
 cd frontend
 npm install
-```
-
-### 2. Create .env file
-
-```bash
-cp .env.example .env
-```
-
-The default `VITE_API_BASE_URL=http://localhost:5050` is already correct for local dev.
-
-### 3. Start dev server
-
-```bash
+cp .env.example .env   # VITE_API_BASE_URL=http://localhost:5050
 npm run dev
+# Frontend: http://localhost:5173
 ```
-
-Frontend runs at **http://localhost:5173**
 
 ---
 
 ## Running Tests
 
-### Backend (20 tests)
-
 ```bash
+# Backend (20 tests)
 cd backend
 dotnet test --logger "console;verbosity=normal"
-```
 
-### Frontend (27 tests)
-
-```bash
+# Frontend (27 tests)
 cd frontend
 npm test
 ```
@@ -238,12 +212,12 @@ npm test
 | GET | `/api/weather/history` | Return last 10 searches |
 | DELETE | `/api/weather/history` | Clear all history |
 | GET | `/api/health` | Health check |
+| GET | `/metrics` | Prometheus metrics (internal only — not via Ingress) |
 
 ### Example response — GET /api/weather/London
 
 ```json
 {
-  "id": 1,
   "city": "London",
   "country": "GB",
   "temperature": 15.5,
@@ -252,29 +226,71 @@ npm test
   "description": "clear sky",
   "iconCode": "01d",
   "iconUrl": "https://openweathermap.org/img/wn/01d@2x.png",
-  "searchedAt": "2026-06-12T10:30:00Z"
-}
-```
-
-### Error response format
-
-```json
-{
-  "error": "City 'Xyz' was not found.",
-  "statusCode": 404
+  "searchedAt": "2026-06-18T10:30:00Z"
 }
 ```
 
 ---
 
-## Azure Deployment
+## Observability
 
-This app is designed to be deployed via Azure DevOps pipelines to Azure App Service.
+Two complementary monitoring layers:
 
-- Secrets are injected as **App Service Application Settings** — they override `appsettings.json` automatically.
-- Set `ConnectionStrings__DefaultConnection` to your Azure SQL Database connection string.
-- Set `OpenWeatherMap__ApiKey` to your API key.
-- Set `AllowedOrigins__0` to your deployed frontend URL (CORS).
-- The frontend reads `VITE_API_BASE_URL` at **build time** — pass it as a pipeline variable in Azure DevOps.
+### Azure Monitor Container Insights
+Enabled on the AKS cluster. Deploys as a DaemonSet (one agent per node). Collects infrastructure metrics — node CPU/memory, pod restarts, scheduling failures — with zero code changes.
 
-See `ARCHITECTURE.md` for the full CI/CD pipeline design.
+### Prometheus + Grafana
+Installed via `kube-prometheus-stack` Helm chart. Covers application-level metrics.
+
+The API exposes `/metrics` via `prometheus-net.AspNetCore`:
+
+```csharp
+app.UseHttpMetrics();  // instruments every HTTP request
+app.MapMetrics();      // registers GET /metrics
+```
+
+A `ServiceMonitor` CRD tells the Prometheus Operator to scrape the API every 15 seconds:
+
+```
+ServiceMonitor → weatherapp-api Service → API pods → /metrics
+```
+
+**RED method dashboards in Grafana:**
+
+| Metric | PromQL |
+|---|---|
+| Request Rate | `rate(http_requests_received_total{job="weatherapp-api-svc"}[5m])` |
+| Error Rate (5xx) | `rate(http_requests_received_total{job="weatherapp-api-svc", code=~"5.."}[5m])` |
+| p95 Latency | `histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="weatherapp-api-svc"}[5m]))` |
+
+**Access Grafana locally:**
+
+```bash
+kubectl port-forward svc/monitoring-grafana 3000:80 -n monitoring
+# http://localhost:3000  (admin / WeatherApp@Grafana123)
+```
+
+**Verify Prometheus targets:**
+
+```bash
+kubectl port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090 -n monitoring
+# http://localhost:9090/targets — weatherapp-api-monitor should show 2/2 UP
+```
+
+---
+
+## Azure DevOps Variable Group
+
+Pipeline variables stored in `weatherapp-vars-dev`:
+
+| Variable | Description | Secret |
+|---|---|---|
+| `ACR_LOGIN_SERVER` | `<acr-name>.azurecr.io` | No |
+| `ACR_USERNAME` | ACR admin username | No |
+| `ACR_PASSWORD` | ACR admin password | Yes |
+| `AKS_RESOURCE_GROUP` | `rg-weatherapp-dev` | No |
+| `AKS_CLUSTER_NAME` | `weatherapp-aks` | No |
+| `SQL_CONNECTION_STRING` | Azure SQL connection string | Yes |
+| `OWM_API_KEY` | OpenWeatherMap API key | Yes |
+| `INGRESS_EXTERNAL_IP` | NGINX Ingress public IP | No |
+| `VITE_API_BASE_URL` | `http://<INGRESS_EXTERNAL_IP>` | No |

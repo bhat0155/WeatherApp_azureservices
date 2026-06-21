@@ -94,12 +94,11 @@ stages:
     displayName: 'Plan Staging'
     steps:
 
-    # Fresh agent has no Terraform — must install it every time
-    - script: |
-        wget -O terraform.zip https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
-        unzip terraform.zip
-        sudo mv terraform /usr/local/bin/
+    # Install Terraform using the official HashiCorp task — faster than wget
+    - task: TerraformInstaller@1
       displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: $(TF_VERSION)
 
     # terraform init connects to remote state backend
     # terraform plan -out saves the plan to a file (not just prints it)
@@ -132,12 +131,11 @@ stages:
     displayName: 'Plan Production'
     steps:
 
-    # Fresh agent has no Terraform — must install it every time
-    - script: |
-        wget -O terraform.zip https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
-        unzip terraform.zip
-        sudo mv terraform /usr/local/bin/
+    # Install Terraform using the official HashiCorp task — faster than wget
+    - task: TerraformInstaller@1
       displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: $(TF_VERSION)
 
     - script: |
         cd terraform/environments/production

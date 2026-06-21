@@ -40,12 +40,11 @@ stages:
   - job: FormatAndValidate
     steps:
 
-    # Download and install the pinned Terraform version on the agent
-    - script: |
-        wget -O terraform.zip https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
-        unzip terraform.zip
-        sudo mv terraform /usr/local/bin/
+    # Install Terraform using the official HashiCorp task — faster than wget
+    - task: TerraformInstaller@1
       displayName: 'Install Terraform'
+      inputs:
+        terraformVersion: $(TF_VERSION)
 
     # terraform fmt -check returns exit code 1 if any file is not formatted
     # -recursive checks all .tf files in all subdirectories

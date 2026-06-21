@@ -200,7 +200,7 @@ stages:
           # Apply the saved plan — -auto-approve skips confirmation prompt
           # No new plan generated here — applies exactly what was reviewed
           - script: |
-              cd terraform/environments/staging
+              cd $(Build.SourcesDirectory)/terraform/environments/staging
               terraform init
               terraform apply \
                 -input=false \
@@ -266,7 +266,7 @@ stages:
               downloadPath: '$(System.ArtifactsDirectory)'
 
           - script: |
-              cd terraform/environments/production
+              cd $(Build.SourcesDirectory)/terraform/environments/production
               terraform init
               terraform apply \
                 -input=false \

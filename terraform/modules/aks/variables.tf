@@ -14,22 +14,22 @@ variable "resource_group_name" {
 }
 
 variable "aks_subnet_id" {
-    type = string
-    description = "subnetId from networking module"
+  type        = string
+  description = "subnetId from networking module"
 }
 
-variable "acr_id"{
-    type = string
-    description = "acr resource id -grants aks pull access automatically"
+variable "acr_id" {
+  type        = string
+  description = "acr resource id -grants aks pull access automatically"
 }
 
-variable "node_count"{
-    type = number
-    default = 2
+variable "node_count" {
+  type    = number
+  default = 2
 }
 
 variable "vm_size" {
-    type = string
-    description = "VM size for AKS nodes"
-    default     = "Standard_D2ps_v6"
+  type        = string
+  description = "VM size for AKS nodes"
+  default     = "Standard_D2ps_v6"
 }

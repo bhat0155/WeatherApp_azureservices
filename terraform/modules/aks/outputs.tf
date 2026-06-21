@@ -6,5 +6,5 @@ output "cluster_name" {
 output "kube_config" {
   description = "kube config"
   value       = azurerm_kubernetes_cluster.main.kube_config_raw
-  sensitive = true
+  sensitive   = true
 }

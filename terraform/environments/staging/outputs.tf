@@ -13,5 +13,5 @@ output "bastion_ip" {
 output "sql_connection_string" {
   description = "connection string"
   value       = module.database.connection_string
-  sensitive = true
+  sensitive   = true
 }

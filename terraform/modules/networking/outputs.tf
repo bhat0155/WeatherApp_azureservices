@@ -4,11 +4,11 @@ output "vnet_id" {
 }
 
 output "aks_subnet_id" {
-    description = "subnet Id of AKS"
-    value = azurerm_subnet.aks.id
+  description = "subnet Id of AKS"
+  value       = azurerm_subnet.aks.id
 }
 
-output "vm_subnet_id"{
-     description = "subnet Id of VM"
-    value = azurerm_subnet.vm.id
+output "vm_subnet_id" {
+  description = "subnet Id of VM"
+  value       = azurerm_subnet.vm.id
 }

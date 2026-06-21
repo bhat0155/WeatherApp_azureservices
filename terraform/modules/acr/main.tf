@@ -4,10 +4,10 @@ resource "azurerm_container_registry" "main" {
   location            = var.location
   sku                 = "Basic"
   admin_enabled       = true
-  
-   tags = {
-    environment =  var.environment
+
+  tags = {
+    environment = var.environment
     project     = "weatherapp"
-    managed_by   = "terraform"
+    managed_by  = "terraform"
   }
 }

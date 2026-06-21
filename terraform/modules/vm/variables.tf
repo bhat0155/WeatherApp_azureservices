@@ -21,7 +21,7 @@ variable "vm_subnet_id" {
 variable "admin_username" {
   type        = string
   description = "admin username for vm"
-  default = "azureuser"
+  default     = "azureuser"
 }
 
 variable "ssh_public_key" {

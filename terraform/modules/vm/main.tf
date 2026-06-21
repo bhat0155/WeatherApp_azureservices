@@ -5,10 +5,10 @@ resource "azurerm_public_ip" "bastion" {
   location            = var.location
   allocation_method   = "Static"
 
-   tags = {
-    environment =  var.environment
+  tags = {
+    environment = var.environment
     project     = "weatherapp"
-    managed_by   = "terraform"
+    managed_by  = "terraform"
   }
 }
 
@@ -22,7 +22,7 @@ resource "azurerm_network_interface" "bastion" {
     name                          = "internal"
     subnet_id                     = var.vm_subnet_id
     private_ip_address_allocation = "Dynamic"
-    public_ip_address_id = azurerm_public_ip.bastion.id
+    public_ip_address_id          = azurerm_public_ip.bastion.id
   }
 }
 
@@ -54,10 +54,10 @@ resource "azurerm_linux_virtual_machine" "bastion" {
     version   = "latest"
   }
 
-   tags = {
-    environment =  var.environment
+  tags = {
+    environment = var.environment
     project     = "weatherapp"
-    managed_by   = "terraform"
-    role = "bastion"
+    managed_by  = "terraform"
+    role        = "bastion"
   }
 }

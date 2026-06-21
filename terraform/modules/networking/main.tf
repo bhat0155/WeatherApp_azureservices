@@ -7,9 +7,9 @@ resource "azurerm_virtual_network" "main" {
   address_space       = ["10.0.0.0/16"]
 
   tags = {
-    environment =  var.environment
+    environment = var.environment
     project     = "weatherapp"
-    managed_by   = "terraform"
+    managed_by  = "terraform"
   }
 }
 
@@ -54,8 +54,8 @@ resource "azurerm_network_security_group" "vm" {
 
   tags = {
     environment = var.environment
-    project = "weatherapp"
-    managed_by = "terraform"
+    project     = "weatherapp"
+    managed_by  = "terraform"
 
   }
 }

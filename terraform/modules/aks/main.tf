@@ -6,9 +6,9 @@ resource "azurerm_kubernetes_cluster" "main" {
   dns_prefix          = "weatherapp-${var.environment}"
 
   default_node_pool {
-    name       = "agentpool"
-    node_count = var.node_count
-    vm_size    = var.vm_size
+    name           = "agentpool"
+    node_count     = var.node_count
+    vm_size        = var.vm_size
     vnet_subnet_id = var.aks_subnet_id
   }
 
@@ -16,7 +16,7 @@ resource "azurerm_kubernetes_cluster" "main" {
     type = "SystemAssigned"
   }
 
-  network_profile {network_plugin = "kubenet"}
+  network_profile { network_plugin = "kubenet" }
 
   tags = {
     environment = var.environment
@@ -29,8 +29,8 @@ resource "azurerm_kubernetes_cluster" "main" {
 
 // AKS permission to pull from ACR
 resource "azurerm_role_assignment" "main" {
-  scope                = var.acr_id
-  role_definition_name = "AcrPull"
-  principal_id         = azurerm_kubernetes_cluster.main.kubelet_identity[0].object_id
+  scope                            = var.acr_id
+  role_definition_name             = "AcrPull"
+  principal_id                     = azurerm_kubernetes_cluster.main.kubelet_identity[0].object_id
   skip_service_principal_aad_check = true
 }

@@ -180,6 +180,9 @@ stages:
         deploy:
           steps:
 
+          # deployment jobs don't auto-checkout — must be explicit
+          - checkout: self
+
           # Install Terraform using the official HashiCorp task
           - task: TerraformInstaller@1
             displayName: 'Install Terraform'
@@ -247,6 +250,9 @@ stages:
       runOnce:
         deploy:
           steps:
+
+          # deployment jobs don't auto-checkout — must be explicit
+          - checkout: self
 
           - task: TerraformInstaller@1
             displayName: 'Install Terraform'

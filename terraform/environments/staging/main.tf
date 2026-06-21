@@ -81,3 +81,10 @@ module "storage" {
   location            = local.location
   resource_group_name = azurerm_resource_group.main.name
 }
+
+// policy
+module "policy" {
+  source          = "../../modules/policy"
+  environment     = local.environment
+  subscription_id = "aff4a0aa-cb6a-4f41-b93a-5cbd50748051"
+}

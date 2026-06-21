@@ -5,7 +5,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 trigger:
   branches:
-    include: 
+    include:
       - main
   paths:
     include:
@@ -159,3 +159,135 @@ stages:
       inputs:
         pathToPublish: '$(Build.ArtifactStagingDirectory)/production.tfplan'
         artifactName: 'production-plan'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 3: APPLY STAGING
+# Downloads the exact plan file saved by the Plan stage and applies it.
+# Uses 'deployment' job type — links to infra-staging environment in Azure DevOps
+# enabling deployment tracking and history.
+# Runs automatically after Plan succeeds — no approval needed for staging.
+# ─────────────────────────────────────────────────────────────────────────────
+- stage: ApplyStaging
+  displayName: 'Apply to Staging'
+  dependsOn: Plan
+  condition: succeeded()
+  jobs:
+  - deployment: ApplyStaging
+    displayName: 'terraform apply (staging)'
+    environment: 'infra-staging'     # no approval gate — auto applies
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          # Install Terraform using the official HashiCorp task
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: $(TF_VERSION)
+
+          # Download the exact plan file saved in the Plan stage
+          # Applying this file guarantees what was reviewed is what gets applied
+          - task: DownloadBuildArtifacts@0
+            displayName: 'Download staging plan'
+            inputs:
+              artifactName: 'staging-plan'
+              downloadPath: '$(System.ArtifactsDirectory)'
+
+          # Apply the saved plan — -auto-approve skips confirmation prompt
+          # No new plan generated here — applies exactly what was reviewed
+          - script: |
+              cd terraform/environments/staging
+              terraform init
+              terraform apply \
+                -input=false \
+                -auto-approve \
+                $(System.ArtifactsDirectory)/staging-plan/staging.tfplan
+            displayName: 'terraform apply (staging)'
+            env:
+              ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+              ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+              ARM_TENANT_ID: $(ARM_TENANT_ID)
+              ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+              TF_VAR_sql_admin_password: $(TF_VAR_sql_admin_password)
+              TF_VAR_ssh_public_key: $(TF_VAR_ssh_public_key)
+
+          # Smoke test — verify AKS cluster was actually created
+          - script: |
+              az login --service-principal \
+                -u $(ARM_CLIENT_ID) \
+                -p $(ARM_CLIENT_SECRET) \
+                --tenant $(ARM_TENANT_ID)
+              az aks show \
+                --resource-group rg-weatherapp-staging \
+                --name aks-weatherapp-staging \
+                --query provisioningState \
+                -o tsv
+            displayName: 'Smoke test — verify AKS exists'
+            env:
+              ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+              ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+              ARM_TENANT_ID: $(ARM_TENANT_ID)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 4: APPLY PRODUCTION
+# Same as staging but PAUSES for manual approval before running.
+# The pipeline emails you — you review the plan artifact — then approve.
+# Only after approval does Terraform apply to production.
+# ─────────────────────────────────────────────────────────────────────────────
+- stage: ApplyProduction
+  displayName: 'Apply to Production'
+  dependsOn: ApplyStaging
+  condition: succeeded()
+  jobs:
+  - deployment: ApplyProduction
+    displayName: 'terraform apply (production)'
+    environment: 'infra-production'   # approval gate configured here
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+
+          - task: TerraformInstaller@1
+            displayName: 'Install Terraform'
+            inputs:
+              terraformVersion: $(TF_VERSION)
+
+          - task: DownloadBuildArtifacts@0
+            displayName: 'Download production plan'
+            inputs:
+              artifactName: 'production-plan'
+              downloadPath: '$(System.ArtifactsDirectory)'
+
+          - script: |
+              cd terraform/environments/production
+              terraform init
+              terraform apply \
+                -input=false \
+                -auto-approve \
+                $(System.ArtifactsDirectory)/production-plan/production.tfplan
+            displayName: 'terraform apply (production)'
+            env:
+              ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+              ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+              ARM_TENANT_ID: $(ARM_TENANT_ID)
+              ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+              TF_VAR_sql_admin_password: $(TF_VAR_sql_admin_password_prod)
+              TF_VAR_ssh_public_key: $(TF_VAR_ssh_public_key)
+
+          # Smoke test — verify AKS cluster was actually created
+          - script: |
+              az login --service-principal \
+                -u $(ARM_CLIENT_ID) \
+                -p $(ARM_CLIENT_SECRET) \
+                --tenant $(ARM_TENANT_ID)
+              az aks show \
+                --resource-group rg-weatherapp-production \
+                --name aks-weatherapp-production \
+                --query provisioningState \
+                -o tsv
+            displayName: 'Smoke test — verify AKS exists'
+            env:
+              ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+              ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+              ARM_TENANT_ID: $(ARM_TENANT_ID)

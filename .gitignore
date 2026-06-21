@@ -31,6 +31,12 @@ coverage/
 # Internal planning — not for repo
 roadmap/
 
+# Terraform — never commit local state or provider cache
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+
 # OS
 .DS_Store
 Thumbs.db

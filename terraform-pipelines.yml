@@ -1,0 +1,164 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# TRIGGER
+# Only runs when files inside terraform/ change on main branch.
+# No point validating infrastructure when only app code changed.
+# ─────────────────────────────────────────────────────────────────────────────
+trigger:
+  branches:
+    include: 
+      - main
+  paths:
+    include:
+      - terraform/**
+
+# Use a Microsoft-hosted Ubuntu agent — no self-hosted agent needed
+pool:
+  vmImage: 'ubuntu-latest'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VARIABLES
+# terraform-vars group pulls ARM credentials and TF_VAR_ secrets from Library.
+# TF_VERSION pins the exact Terraform version used — prevents surprise upgrades.
+# ─────────────────────────────────────────────────────────────────────────────
+variables:
+  - group: terraform-vars       # contains ARM_CLIENT_ID, ARM_CLIENT_SECRET, etc.
+  - name: TF_VERSION
+    value: '1.15.0'
+
+stages:
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 1: VALIDATE
+# Checks code quality without touching Azure.
+#   - terraform fmt -check  → fails if code is not properly formatted
+#   - terraform validate    → fails if HCL syntax is invalid
+# -backend=false skips connecting to the state backend — no Azure auth needed.
+# ─────────────────────────────────────────────────────────────────────────────
+- stage: Validate
+  displayName: 'Format and Validate'
+  jobs:
+  - job: FormatAndValidate
+    steps:
+
+    # Download and install the pinned Terraform version on the agent
+    - script: |
+        wget -O terraform.zip https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
+        unzip terraform.zip
+        sudo mv terraform /usr/local/bin/
+      displayName: 'Install Terraform'
+
+    # terraform fmt -check returns exit code 1 if any file is not formatted
+    # -recursive checks all .tf files in all subdirectories
+    - script: |
+        cd terraform
+        terraform fmt -check -recursive
+      displayName: 'Check formatting (terraform fmt)'
+
+    # terraform validate checks HCL syntax — does NOT contact Azure
+    # Catches typos, missing required fields, invalid resource references
+    - script: |
+        cd terraform/environments/staging
+        terraform init -backend=false
+        terraform validate
+      displayName: 'Validate staging'
+      env:
+        ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+        ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+        ARM_TENANT_ID: $(ARM_TENANT_ID)
+        ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+
+    - script: |
+        cd terraform/environments/production
+        terraform init -backend=false
+        terraform validate
+      displayName: 'Validate production'
+      env:
+        ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+        ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+        ARM_TENANT_ID: $(ARM_TENANT_ID)
+        ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGE 2: PLAN
+# Runs after Validate succeeds (dependsOn: Validate).
+# Contacts Azure via ARM credentials, computes what would be created.
+# Saves plan to a file with -out flag — this is the exact set of changes.
+# Uploads plan file as artifact so Release Pipeline applies the same plan.
+# ─────────────────────────────────────────────────────────────────────────────
+- stage: Plan
+  displayName: 'Terraform Plan'
+  dependsOn: Validate        # only runs if Validate stage passed
+  condition: succeeded()     # skip entire stage if Validate failed
+  jobs:
+
+  - job: PlanStaging
+    displayName: 'Plan Staging'
+    steps:
+
+    # Fresh agent has no Terraform — must install it every time
+    - script: |
+        wget -O terraform.zip https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
+        unzip terraform.zip
+        sudo mv terraform /usr/local/bin/
+      displayName: 'Install Terraform'
+
+    # terraform init connects to remote state backend
+    # terraform plan -out saves the plan to a file (not just prints it)
+    # -input=false prevents Terraform prompting for missing variables
+    - script: |
+        cd terraform/environments/staging
+        terraform init
+        terraform plan \
+          -out=$(Build.ArtifactStagingDirectory)/staging.tfplan \
+          -input=false
+      displayName: 'terraform plan (staging)'
+      env:
+        # ARM_ variables authenticate Terraform with Azure
+        ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+        ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+        ARM_TENANT_ID: $(ARM_TENANT_ID)
+        ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+        # TF_VAR_ prefix maps directly to terraform variables
+        TF_VAR_sql_admin_password: $(TF_VAR_sql_admin_password)
+        TF_VAR_ssh_public_key: $(TF_VAR_ssh_public_key)
+
+    # Upload saved plan file — Release Pipeline downloads and applies this exact file
+    - task: PublishBuildArtifacts@1
+      displayName: 'Upload staging plan'
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)/staging.tfplan'
+        artifactName: 'staging-plan'
+
+  - job: PlanProduction
+    displayName: 'Plan Production'
+    steps:
+
+    # Fresh agent has no Terraform — must install it every time
+    - script: |
+        wget -O terraform.zip https://releases.hashicorp.com/terraform/$(TF_VERSION)/terraform_$(TF_VERSION)_linux_amd64.zip
+        unzip terraform.zip
+        sudo mv terraform /usr/local/bin/
+      displayName: 'Install Terraform'
+
+    - script: |
+        cd terraform/environments/production
+        terraform init
+        terraform plan \
+          -out=$(Build.ArtifactStagingDirectory)/production.tfplan \
+          -input=false
+      displayName: 'terraform plan (production)'
+      env:
+        ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+        ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+        ARM_TENANT_ID: $(ARM_TENANT_ID)
+        ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+        # Note: prod uses TF_VAR_sql_admin_password_prod — separate password from staging
+        TF_VAR_sql_admin_password: $(TF_VAR_sql_admin_password_prod)
+        TF_VAR_ssh_public_key: $(TF_VAR_ssh_public_key)
+
+    # Upload saved plan file — Release Pipeline downloads and applies this exact file
+    - task: PublishBuildArtifacts@1
+      displayName: 'Upload production plan'
+      inputs:
+        pathToPublish: '$(Build.ArtifactStagingDirectory)/production.tfplan'
+        artifactName: 'production-plan'

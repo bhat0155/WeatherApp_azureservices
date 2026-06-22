@@ -2,7 +2,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: weatherapp-api-monitor
-  namespace: monitoring        # must be in monitoring namespace — that's where Prometheus lives
+  namespace: monitoring
   labels:
     release: kube-prometheus-stack  # must match the Helm release name — Prometheus Operator finds it by this
 spec:

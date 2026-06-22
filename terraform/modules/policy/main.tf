@@ -9,6 +9,11 @@ locals {
 
   # Subscription scope — policy applies to ALL resources in the subscription
   subscription_scope = "/subscriptions/${var.subscription_id}"
+
+  # AKS creates a managed resource group (MC_*) for node pool VMs and VMSS.
+  # Those resources are managed by Azure internally and can't have our tags.
+  # Excluding this scope prevents the policy from blocking AKS node operations.
+  aks_managed_rg_scope = "/subscriptions/${var.subscription_id}/resourceGroups/MC_rg-weatherapp-${var.environment}_aks-weatherapp-${var.environment}_canadacentral"
 }
 
 # Enforce that every resource has an "environment" tag (e.g. staging, production)
@@ -17,8 +22,8 @@ resource "azurerm_subscription_policy_assignment" "require_environment_tag" {
   display_name         = "Require environment tag (${var.environment})"
   policy_definition_id = local.require_tag_policy_id
   subscription_id      = local.subscription_scope
+  not_scopes           = [local.aks_managed_rg_scope]
 
-  # jsonencode converts HCL map → JSON string that the policy API expects
   parameters = jsonencode({
     tagName = { value = "environment" }
   })
@@ -30,6 +35,7 @@ resource "azurerm_subscription_policy_assignment" "require_project_tag" {
   display_name         = "Require project tag (${var.environment})"
   policy_definition_id = local.require_tag_policy_id
   subscription_id      = local.subscription_scope
+  not_scopes           = [local.aks_managed_rg_scope]
 
   parameters = jsonencode({
     tagName = { value = "project" }
@@ -42,6 +48,7 @@ resource "azurerm_subscription_policy_assignment" "require_managed_by_tag" {
   display_name         = "Require managed_by tag (${var.environment})"
   policy_definition_id = local.require_tag_policy_id
   subscription_id      = local.subscription_scope
+  not_scopes           = [local.aks_managed_rg_scope]
 
   parameters = jsonencode({
     tagName = { value = "managed_by" }
@@ -56,6 +63,6 @@ resource "azurerm_subscription_policy_assignment" "allowed_vm_sizes" {
   subscription_id      = local.subscription_scope
 
   parameters = jsonencode({
-    listOfAllowedSKUs = { value = ["Standard_D2ads_v6", "Standard_D2ps_v6", "Standard_D4ps_v6"] }
+    listOfAllowedSKUs = { value = ["Standard_D2ads_v6", "Standard_D2ps_v6", "Standard_D4ps_v6", "Standard_D2as_v6"] }
   })
 }

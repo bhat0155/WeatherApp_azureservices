@@ -76,27 +76,29 @@ stages:
       # :$(imageTag) - imutable tied to build, used by deployments
       # :latest - convenience pointer, always points to latest build
     - script: |
-          docker build \
+          docker buildx build \
             --platform linux/amd64 \
             -t $(ACR_LOGIN_SERVER)/weatherapp-api:$(imageTag) \
             -t $(ACR_LOGIN_SERVER)/weatherapp-api:latest \
+            --push \
             backend/
-          docker push $(ACR_LOGIN_SERVER)/weatherapp-api:$(imageTag)
-          docker push $(ACR_LOGIN_SERVER)/weatherapp-api:latest
       displayName: 'Build and Push API image'
+      env:
+        DOCKER_BUILDKIT: '1'
 
       # build frontend image from frontend/Dockerfile
       # vite_api_base_url is needed at build time for the frontend to know where the api is
     - script: |
-          docker build \
+          docker buildx build \
             --platform linux/amd64 \
             --build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
             -t $(ACR_LOGIN_SERVER)/weatherapp-frontend:$(imageTag) \
             -t $(ACR_LOGIN_SERVER)/weatherapp-frontend:latest \
+            --push \
             frontend/
-          docker push $(ACR_LOGIN_SERVER)/weatherapp-frontend:$(imageTag)
-          docker push $(ACR_LOGIN_SERVER)/weatherapp-frontend:latest
       displayName: 'Build and Push Frontend image'
+      env:
+        DOCKER_BUILDKIT: '1'
 
 # ─── STAGE 3: DEPLOY → DEV ───────────────────────────────────────────────────
 # Purpose: deploy the freshly-built images to the AKS dev cluster.

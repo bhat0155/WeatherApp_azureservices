@@ -6,10 +6,11 @@ resource "azurerm_kubernetes_cluster" "main" {
   dns_prefix          = "weatherapp-${var.environment}"
 
   default_node_pool {
-    name           = "agentpool"
-    node_count     = var.node_count
-    vm_size        = var.vm_size
-    vnet_subnet_id = var.aks_subnet_id
+    name                        = "agentpool"
+    node_count                  = var.node_count
+    vm_size                     = var.vm_size
+    vnet_subnet_id              = var.aks_subnet_id
+    temporary_name_for_rotation = "tmpnodepool"
   }
 
   identity {

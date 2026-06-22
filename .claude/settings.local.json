@@ -5,7 +5,9 @@
       "Bash(xargs cat)",
       "Bash(terraform version *)",
       "Bash(az account *)",
-      "Bash(terraform init *)"
+      "Bash(terraform init *)",
+      "Bash(az resource *)",
+      "Bash(az aks nodepool list *)"
     ]
   }
 }

@@ -26,6 +26,7 @@ spec:
       containers:
       - name: api
         image: ACR_LOGIN_SERVER/weatherapp-api:IMAGE_TAG   # sed replaces both at deploy time
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
         envFrom:

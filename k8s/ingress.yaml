@@ -3,9 +3,8 @@ kind: Ingress
 metadata:
   name: weatherapp-ingress
   namespace: weatherapp
-  annotations:
-    kubernetes.io/ingress.class: "nginx" # tells nginx ingress controller to handle this
 spec:
+  ingressClassName: nginx
   rules:
   -  http:
       paths:

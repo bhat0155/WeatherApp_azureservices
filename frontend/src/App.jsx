@@ -11,7 +11,7 @@ export default function App() {
   return (
     <div className="app-bg">
       <div className="card">
-        <h1 className="title">Ekam's Weather App with CICD and Terraform 2</h1>
+        <h1 className="title">Kranthi's Weather App with CICD and Terraform </h1>
         <p className="subtitle">Search for real-time weather in any city</p>
 
         <SearchBar onSearch={search} disabled={loading} />

@@ -4,7 +4,7 @@ metadata:
   name: weatherapp-api-monitor
   namespace: monitoring        # must be in monitoring namespace — that's where Prometheus lives
   labels:
-    release: monitoring        # must match the Helm release name — Prometheus Operator finds it by this
+    release: kube-prometheus-stack  # must match the Helm release name — Prometheus Operator finds it by this
 spec:
   namespaceSelector:
     matchNames:

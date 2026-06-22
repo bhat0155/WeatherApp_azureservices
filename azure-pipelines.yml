@@ -187,5 +187,5 @@ stages:
                 # curl -f exits non-zero on HTTP 4xx/5xx — without -f curl returns 0
                 # even on a 503, hiding a broken deploy.
                 sleep 15
-                curl -f http://$(INGRESS_EXTERNAL_IP)/api/health
+                curl -f --max-time 30 http://$(INGRESS_EXTERNAL_IP)/api/health
                 echo "Smoke test passed"

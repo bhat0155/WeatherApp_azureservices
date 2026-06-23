@@ -22,6 +22,12 @@ resource "azurerm_mssql_database" "main" {
   name      = "weatherapp-db-${var.environment}"
   server_id = azurerm_mssql_server.main.id
   sku_name  = "Basic"
+
+   tags = {
+    environment = var.environment
+    project     = "weatherapp"
+    managed_by  = "terraform"
+  }
 }
 
 // firewall rule: allow azure resources to interact with db

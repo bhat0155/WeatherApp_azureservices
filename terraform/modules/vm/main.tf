@@ -18,6 +18,12 @@ resource "azurerm_network_interface" "bastion" {
   location            = var.location
   resource_group_name = var.resource_group_name
 
+   tags = {
+    environment = var.environment
+    project     = "weatherapp"
+    managed_by  = "terraform"
+  }
+
   ip_configuration {
     name                          = "internal"
     subnet_id                     = var.vm_subnet_id

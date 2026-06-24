@@ -18,7 +18,7 @@ resource "azurerm_network_interface" "bastion" {
   location            = var.location
   resource_group_name = var.resource_group_name
 
-   tags = {
+  tags = {
     environment = var.environment
     project     = "weatherapp"
     managed_by  = "terraform"

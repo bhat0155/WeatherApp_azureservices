@@ -23,7 +23,7 @@ resource "azurerm_mssql_database" "main" {
   server_id = azurerm_mssql_server.main.id
   sku_name  = "Basic"
 
-   tags = {
+  tags = {
     environment = var.environment
     project     = "weatherapp"
     managed_by  = "terraform"

@@ -7,7 +7,12 @@
       "Bash(az account *)",
       "Bash(terraform init *)",
       "Bash(az resource *)",
-      "Bash(az aks nodepool list *)"
+      "Bash(az aks nodepool list *)",
+      "Bash(terraform fmt *)",
+      "Bash(echo \"Exit code: $?\")",
+      "Bash(kubectl logs *)",
+      "Bash(grep -E '\\\\.\\(tf|yml|yaml|md\\)$')",
+      "Bash(grep -E '\\\\.tf$')"
     ]
   }
 }
